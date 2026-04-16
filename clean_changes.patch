@@ -1,0 +1,23 @@
+diff --git a/.gitignore b/.gitignore
+index b2ccef4..8d6b55a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,8 +1,8 @@
+ .env
+-credentials.json
+ .venv/
+ venv/
+ __pycache__/
+ *.pyc
+ .idea/
+-.vscode/
+\ No newline at end of file
++.vscode/
++credentials.json
+\ No newline at end of file
+diff --git a/git b/git
+new file mode 100644
+index 0000000..e69de29
+diff --git a/main b/main
+new file mode 100644
+index 0000000..e69de29
