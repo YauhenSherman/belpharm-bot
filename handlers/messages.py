@@ -2,7 +2,6 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from config import USER_MAP
-from utils.logger import logger
 from keyboards.reply import (
     get_main_keyboard,
     get_status_keyboard,
@@ -36,26 +35,24 @@ STATUSES = [
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-user_id = update.effective_user.id
-user_name = USER_MAP.get(user_id, "Неизвестный")
-text = update.message.text
-
-if user_id not in USER_MAP:
-    logger.warning("Запрещённый доступ | user_id=%s | text=%r", user_id, text)
-    await update.message.reply_text("⛔ Доступ запрещён.")
-    return
-
-logger.info("%s (%s): %s", user_name, user_id, text)
-
     if not update.message or not update.message.text:
         return
 
     if update.effective_chat.type != "private":
         return
 
+    user_id = update.effective_user.id
     text = update.message.text.strip()
+    user_name = USER_MAP.get(user_id, "Неизвестный")
+
+    if user_id not in USER_MAP:
+        logger.warning("Запрещённый доступ | user_id=%s | text=%r", user_id, text)
+        await update.message.reply_text("⛔ Доступ запрещён.")
+        return
+
+    logger.info("%s (%s): %s", user_name, user_id, text)
+
     telegram_id = update.message.from_user.id
-    logger.info("Сообщение от %s: %s", telegram_id, text)
 
     if text == "Меню":
         user_state.pop(telegram_id, None)
@@ -178,9 +175,9 @@ logger.info("%s (%s): %s", user_name, user_id, text)
         return
 
     if text == "Мои аптеки":
-        user_name = get_user_name(telegram_id, USER_MAP)
+        current_user_name = get_user_name(telegram_id, USER_MAP)
 
-        if not user_name:
+        if not current_user_name:
             await update.message.reply_text(
                 f"Твой Telegram ID: {telegram_id}\n"
                 f"Я пока не знаю, кто ты в таблице.\n"
@@ -192,12 +189,12 @@ logger.info("%s (%s): %s", user_name, user_id, text)
         my_rows = []
         for row in rows:
             responsible = str(row.get("ОТВЕТСТВЕННЫЙ", "")).strip()
-            if responsible == user_name:
+            if responsible == current_user_name:
                 my_rows.append(row)
 
         if not my_rows:
             await update.message.reply_text(
-                f"Для {user_name} аптеки не найдены.",
+                f"Для {current_user_name} аптеки не найдены.",
                 reply_markup=get_main_keyboard(),
             )
             return
@@ -209,7 +206,7 @@ logger.info("%s (%s): %s", user_name, user_id, text)
         ]
 
         message = (
-            f"Мои аптеки ({user_name}):\n\n"
+            f"Мои аптеки ({current_user_name}):\n\n"
             + "\n".join(preview)
             + "\n\nНажми кнопку с кодом аптеки."
         )
