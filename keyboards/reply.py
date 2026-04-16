@@ -52,3 +52,12 @@ def build_districts_keyboard(districts: list[str]):
 
     keyboard.append(["Меню"])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
+def get_stand_format_keyboard():
+    keyboard = [
+        ["А4 вертикаль", "А4 горизонт"],
+        ["А5", "А6 наклейка"],
+        ["Отмена"],
+    ]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
