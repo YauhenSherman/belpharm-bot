@@ -1,0 +1,16 @@
+def normalize_text(text: str) -> str:
+    return (
+        text.strip()
+        .upper()
+        .replace("А", "A")
+        .replace("В", "B")
+        .replace("Е", "E")
+        .replace("К", "K")
+        .replace("М", "M")
+        .replace("Н", "H")
+        .replace("О", "O")
+        .replace("Р", "P")
+        .replace("С", "C")
+        .replace("Т", "T")
+        .replace("Х", "X")
+    )
