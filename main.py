@@ -1,6 +1,8 @@
 import os
 import asyncio
+import threading
 
+from flask import Flask
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -15,6 +17,19 @@ from config import BOT_TOKEN, USER_MAP
 from handlers.start import start
 from handlers.messages import handle_message
 from utils.logger import logger
+
+
+web_app = Flask(__name__)
+
+
+@web_app.route("/")
+def home():
+    return "Bot is alive"
+
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port)
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -67,31 +82,10 @@ def main():
 
     logger.info("Бот запущен...")
 
-    port = int(os.environ.get("PORT", 10000))
-    webhook_url = os.environ.get("WEBHOOK_URL")
+    threading.Thread(target=run_web, daemon=True).start()
 
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        webhook_url=webhook_url,
-    )
+    app.run_polling()
 
 
 if __name__ == "__main__":
     main()
-from flask import Flask
-import threading
-import os
-
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "Bot is alive"
-
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
-# запускаем веб-сервер в отдельном потоке
-threading.Thread(target=run_web).start()
