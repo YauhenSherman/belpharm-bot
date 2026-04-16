@@ -2,7 +2,13 @@ import os
 import asyncio
 
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    ContextTypes,
+    filters,
+)
 from telegram.request import HTTPXRequest
 
 from config import BOT_TOKEN, USER_MAP
@@ -18,13 +24,13 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
     if isinstance(update, Update) and update.effective_user:
         user_id = update.effective_user.id
-        user_name = USER_MAP.get(user_id, "Неизвестный пользователь")
+        user_name = USER_MAP.get(user_id, "Неизвестный")
 
     if isinstance(update, Update) and update.effective_message:
         text = update.effective_message.text
 
     logger.exception(
-        "Ошибка при обработке обновления | user=%s (%s) | text=%r",
+        "Ошибка | user=%s (%s) | text=%r",
         user_name,
         user_id,
         text,
@@ -34,10 +40,10 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     if isinstance(update, Update) and update.effective_message:
         try:
             await update.effective_message.reply_text(
-                "⚠️ Что-то пошло не так. Попробуйте ещё раз."
+                "⚠️ Что-то пошло не так. Попробуйте ещё раз или нажмите «Меню»."
             )
         except Exception:
-            logger.exception("Не удалось отправить сообщение об ошибке пользователю")
+            logger.exception("Не удалось отправить пользователю сообщение об ошибке")
 
 
 def main():
