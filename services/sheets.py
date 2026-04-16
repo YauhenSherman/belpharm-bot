@@ -12,7 +12,8 @@ def get_sheet():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
-
+    print("USING GOOGLE_CREDENTIALS_JSON")
+    
     credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
     if not credentials_json:
         raise ValueError("GOOGLE_CREDENTIALS_JSON не найден в переменных окружения")
