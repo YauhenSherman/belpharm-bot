@@ -1,7 +1,10 @@
+import os
+import json
+
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-from config import SPREADSHEET_NAME, GOOGLE_CREDENTIALS_FILE
+from config import SPREADSHEET_NAME
 
 
 def get_sheet():
@@ -9,10 +12,18 @@ def get_sheet():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(
-        GOOGLE_CREDENTIALS_FILE,
+
+    credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+    if not credentials_json:
+        raise ValueError("GOOGLE_CREDENTIALS_JSON не найден в переменных окружения")
+
+    creds_dict = json.loads(credentials_json)
+
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        creds_dict,
         scope,
     )
+
     client = gspread.authorize(creds)
     return client.open(SPREADSHEET_NAME).sheet1
 
