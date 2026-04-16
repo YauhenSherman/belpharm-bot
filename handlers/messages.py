@@ -2,6 +2,7 @@ from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from config import USER_MAP
+from utils.logger import logger
 from keyboards.reply import (
     get_main_keyboard,
     get_status_keyboard,
@@ -35,6 +36,17 @@ STATUSES = [
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+user_id = update.effective_user.id
+user_name = USER_MAP.get(user_id, "Неизвестный")
+text = update.message.text
+
+if user_id not in USER_MAP:
+    logger.warning("Запрещённый доступ | user_id=%s | text=%r", user_id, text)
+    await update.message.reply_text("⛔ Доступ запрещён.")
+    return
+
+logger.info("%s (%s): %s", user_name, user_id, text)
+
     if not update.message or not update.message.text:
         return
 
