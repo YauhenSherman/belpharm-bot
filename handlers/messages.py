@@ -144,6 +144,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             address=address,
             status=status,
             comment=comment,
+            stand_format=stand_format,
         )
 
         user_state.pop(telegram_id, None)

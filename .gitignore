@@ -6,3 +6,4 @@ __pycache__/
 .idea/
 .vscode/
 credentials.json
+clean_changes.patch
