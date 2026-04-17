@@ -12,8 +12,7 @@ def get_sheet():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
-    print("USING GOOGLE_CREDENTIALS_JSON")
-    
+
     credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
     if not credentials_json:
         raise ValueError("GOOGLE_CREDENTIALS_JSON не найден в переменных окружения")
@@ -45,28 +44,40 @@ def update_pharmacy_result(
     headers = sheet.row_values(1)
     rows = sheet.get_all_records()
 
-    code_col = headers.index("КОД") + 1
-    status_col = headers.index("Результаты согласования") + 1
-    format_col = headers.index("Формат стендов") + 1
-    comment_col = headers.index("Комментарий") + 1
+    required_headers = {
+        "code": "КОД",
+        "status": "Результаты согласования",
+        "format": "Формат стенда",
+        "comment": "Комментарий",
+    }
+
+    missing = [name for name in required_headers.values() if name not in headers]
+    if missing:
+        raise ValueError(
+            f"Не найдены столбцы в таблице: {missing}. Фактические заголовки: {headers}"
+        )
+
+    status_col = headers.index(required_headers["status"]) + 1
+    format_col = headers.index(required_headers["format"]) + 1
+    comment_col = headers.index(required_headers["comment"]) + 1
 
     saved_row = None
 
     for i, row in enumerate(rows, start=2):
-        row_code = normalize_text_func(str(row.get("КОД", "")))
+        row_code = normalize_text_func(str(row.get(required_headers["code"], "")))
 
         if row_code == normalize_text_func(str(code)):
             sheet.update_cell(i, status_col, status)
-
-            if status == "Согласовано":
-                sheet.update_cell(i, format_col, stand_format or "")
-
+            sheet.update_cell(i, format_col, stand_format or "")
             sheet.update_cell(i, comment_col, comment)
 
             saved_row = row.copy()
-            saved_row["Результаты согласования"] = status
-            saved_row["Формат стендов"] = stand_format or ""
-            saved_row["Комментарий"] = comment
+            saved_row[required_headers["status"]] = status
+            saved_row[required_headers["format"]] = stand_format or ""
+            saved_row[required_headers["comment"]] = comment
             break
+
+    if not saved_row:
+        raise ValueError(f"Не найдена строка для кода аптеки: {code}")
 
     return saved_row
