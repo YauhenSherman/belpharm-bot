@@ -109,6 +109,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user_state.get(telegram_id) == "waiting_comment":
         pharmacy_uid = selected_pharmacy_uid.get(telegram_id)
+        pharmacy_label = selected_pharmacy_label.get(telegram_id)
         status = pending_status.get(telegram_id)
         stand_format = pending_stand_format.get(telegram_id)
 
@@ -137,7 +138,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         report_user_name = get_user_name(telegram_id, USER_MAP) or f"ID {telegram_id}"
-        pharmacy_code = str(saved_row.get("КОД", "")) if saved_row else ""
+        pharmacy_display = (
+            str(saved_row.get("LABEL", ""))
+            if saved_row
+            else str(pharmacy_label or pharmacy_uid)
+        )
+        pharmacy_code = (
+            str(saved_row.get("КОД", ""))
+            if saved_row
+            else str(pharmacy_label or pharmacy_uid)
+        )
         address = str(saved_row.get("Адрес", "")) if saved_row else ""
 
         await send_group_report(
@@ -157,6 +167,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         selected_pharmacy_label.pop(telegram_id, None)
 
         saved_message = f"Сохранено ✅\n\nСтатус: {status}"
+        saved_message += f"\nАптека: {pharmacy_display}"
         if stand_format:
             saved_message += f"\nФормат: {stand_format}"
         saved_message += f"\nКомментарий: {comment}"
