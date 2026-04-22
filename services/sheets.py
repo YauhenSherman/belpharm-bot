@@ -33,6 +33,17 @@ def get_rows():
     return sheet.get_all_records()
 
 
+def _find_header(headers: list[str], candidates: list[str], field_name: str) -> str:
+    for candidate in candidates:
+        if candidate in headers:
+            return candidate
+
+    raise ValueError(
+        f"Не найден столбец '{field_name}'. "
+        f"Ожидаемые варианты: {candidates}. Фактические заголовки: {headers}"
+    )
+
+
 def update_pharmacy_result(
     code: str,
     status: str,
@@ -45,17 +56,22 @@ def update_pharmacy_result(
     rows = sheet.get_all_records()
 
     required_headers = {
-        "code": "КОД",
-        "status": "Результаты согласования",
-        "format": "Формат стенда",
-        "comment": "Комментарий",
+        "code": _find_header(headers, ["КОД"], "КОД"),
+        "status": _find_header(
+            headers,
+            ["Результаты согласования"],
+            "Результаты согласования",
+        ),
+        "format": _find_header(
+            headers,
+            [
+                "Формат стенда",
+                "Формат стенда (А4 вертикаль.горизонт, А5, А6 наклейка)",
+            ],
+            "Формат стенда",
+        ),
+        "comment": _find_header(headers, ["Комментарий"], "Комментарий"),
     }
-
-    missing = [name for name in required_headers.values() if name not in headers]
-    if missing:
-        raise ValueError(
-            f"Не найдены столбцы в таблице: {missing}. Фактические заголовки: {headers}"
-        )
 
     status_col = headers.index(required_headers["status"]) + 1
     format_col = headers.index(required_headers["format"]) + 1

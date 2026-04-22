@@ -6,6 +6,10 @@ def get_user_name(telegram_id: int, user_map: dict):
 
 
 def build_pharmacy_card(row: dict) -> str:
+    format_value = row.get("Формат стенда", "")
+    if not format_value:
+        format_value = row.get("Формат стенда (А4 вертикаль.горизонт, А5, А6 наклейка)", "")
+
     return (
         f"🏥 Карточка аптеки\n\n"
         f"Код: {row.get('КОД', '')}\n"
@@ -16,7 +20,7 @@ def build_pharmacy_card(row: dict) -> str:
         f"Стенд: {row.get('ЕСТЬ СТЕНД (ГРУППА)', '')}\n"
         f"Ответственный: {row.get('ОТВЕТСТВЕННЫЙ', '')}\n"
         f"Статус: {row.get('Результаты согласования', '')}\n"
-        f"Формат: {row.get('Формат стенда (А4 вертикаль.горизонт, А5, А6 наклейка)', '')}"
+        f"Формат: {format_value}"
     )
 
 
