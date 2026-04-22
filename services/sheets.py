@@ -5,6 +5,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 from config import SPREADSHEET_NAME
+from services.pharmacy import enrich_pharmacy_rows, build_pharmacy_uid
 
 
 def get_sheet():
@@ -30,7 +31,7 @@ def get_sheet():
 
 def get_rows():
     sheet = get_sheet()
-    return sheet.get_all_records()
+    return enrich_pharmacy_rows(sheet.get_all_records())
 
 
 def _find_header(headers: list[str], candidates: list[str], field_name: str) -> str:
@@ -45,7 +46,7 @@ def _find_header(headers: list[str], candidates: list[str], field_name: str) -> 
 
 
 def update_pharmacy_result(
-    code: str,
+    uid: str,
     status: str,
     comment: str,
     normalize_text_func,
@@ -53,7 +54,7 @@ def update_pharmacy_result(
 ):
     sheet = get_sheet()
     headers = sheet.row_values(1)
-    rows = sheet.get_all_records()
+    rows = enrich_pharmacy_rows(sheet.get_all_records())
 
     required_headers = {
         "code": _find_header(headers, ["КОД"], "КОД"),
@@ -80,9 +81,9 @@ def update_pharmacy_result(
     saved_row = None
 
     for i, row in enumerate(rows, start=2):
-        row_code = normalize_text_func(str(row.get(required_headers["code"], "")))
+        row_uid = build_pharmacy_uid(row)
 
-        if row_code == normalize_text_func(str(code)):
+        if row_uid == normalize_text_func(str(uid)):
             sheet.update_cell(i, status_col, status)
             sheet.update_cell(i, format_col, stand_format or "")
             sheet.update_cell(i, comment_col, comment)
@@ -94,6 +95,6 @@ def update_pharmacy_result(
             break
 
     if not saved_row:
-        raise ValueError(f"Не найдена строка для кода аптеки: {code}")
+        raise ValueError(f"Не найдена строка для UID аптеки: {uid}")
 
     return saved_row

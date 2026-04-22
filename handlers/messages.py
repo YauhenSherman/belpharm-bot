@@ -14,11 +14,12 @@ from services.reports import send_group_report
 from services.pharmacy import (
     get_user_name,
     build_pharmacy_card,
-    find_row_by_code,
+    find_row_by_label,
 )
 from state.memory import (
     user_state,
-    selected_pharmacy,
+    selected_pharmacy_uid,
+    selected_pharmacy_label,
     pending_status,
     pending_stand_format,
     selected_district,
@@ -66,6 +67,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_state.pop(telegram_id, None)
         pending_status.pop(telegram_id, None)
         pending_stand_format.pop(telegram_id, None)
+        selected_pharmacy_uid.pop(telegram_id, None)
+        selected_pharmacy_label.pop(telegram_id, None)
         selected_district.pop(telegram_id, None)
 
         await update.message.reply_text(
@@ -105,11 +108,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if user_state.get(telegram_id) == "waiting_comment":
-        code = selected_pharmacy.get(telegram_id)
+        pharmacy_uid = selected_pharmacy_uid.get(telegram_id)
         status = pending_status.get(telegram_id)
         stand_format = pending_stand_format.get(telegram_id)
 
-        if not code or not status:
+        if not pharmacy_uid or not status:
             await update.message.reply_text(
                 "Сначала выбери аптеку и статус.",
                 reply_markup=get_main_keyboard(),
@@ -126,7 +129,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         comment = text
         saved_row = update_pharmacy_result(
-            code=code,
+            uid=pharmacy_uid,
             status=status,
             comment=comment,
             stand_format=stand_format,
@@ -134,7 +137,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         report_user_name = get_user_name(telegram_id, USER_MAP) or f"ID {telegram_id}"
-        pharmacy_code = str(saved_row.get("КОД", "")) if saved_row else str(code)
+        pharmacy_code = str(saved_row.get("КОД", "")) if saved_row else ""
         address = str(saved_row.get("Адрес", "")) if saved_row else ""
 
         await send_group_report(
@@ -150,6 +153,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_state.pop(telegram_id, None)
         pending_status.pop(telegram_id, None)
         pending_stand_format.pop(telegram_id, None)
+        selected_pharmacy_uid.pop(telegram_id, None)
+        selected_pharmacy_label.pop(telegram_id, None)
 
         saved_message = f"Сохранено ✅\n\nСтатус: {status}"
         if stand_format:
@@ -163,9 +168,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text in STATUSES:
-        code = selected_pharmacy.get(telegram_id)
+        pharmacy_uid = selected_pharmacy_uid.get(telegram_id)
 
-        if not code:
+        if not pharmacy_uid:
             await update.message.reply_text(
                 "Сначала выбери аптеку.",
                 reply_markup=get_main_keyboard(),
@@ -206,7 +211,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         selected_district[telegram_id] = text
         user_state[telegram_id] = "district_selected"
 
-        codes = [str(row.get("КОД", "")).strip() for row in district_rows if row.get("КОД")]
+        labels = [str(row.get("LABEL", "")).strip() for row in district_rows if row.get("LABEL")]
         preview = [
             f"• {row.get('КОД', '')} | {row.get('Адрес', '')}"
             for row in district_rows[:10]
@@ -215,7 +220,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = (
             f"Район: {text}\n\n"
             + "\n".join(preview)
-            + "\n\nНажми кнопку с кодом аптеки."
+            + "\n\nНажми кнопку с аптекой."
         )
 
         if len(district_rows) > 10:
@@ -223,13 +228,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             message,
-            reply_markup=build_codes_keyboard(codes),
+            reply_markup=build_codes_keyboard(labels),
         )
         return
 
-    found_row = find_row_by_code(rows, text)
+    found_row = find_row_by_label(rows, text)
     if found_row:
-        selected_pharmacy[telegram_id] = found_row.get("КОД")
+        selected_pharmacy_uid[telegram_id] = found_row.get("UID")
+        selected_pharmacy_label[telegram_id] = found_row.get("LABEL")
 
         await update.message.reply_text(
             build_pharmacy_card(found_row),
@@ -262,7 +268,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        codes = [str(row.get("КОД", "")).strip() for row in my_rows if row.get("КОД")]
+        labels = [str(row.get("LABEL", "")).strip() for row in my_rows if row.get("LABEL")]
         preview = [
             f"• {row.get('КОД', '')} | {row.get('Адрес', '')}"
             for row in my_rows[:10]
@@ -271,7 +277,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = (
             f"Мои аптеки ({current_user_name}):\n\n"
             + "\n".join(preview)
-            + "\n\nНажми кнопку с кодом аптеки."
+            + "\n\nНажми кнопку с аптекой."
         )
 
         if len(my_rows) > 10:
@@ -279,7 +285,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             message,
-            reply_markup=build_codes_keyboard(codes),
+            reply_markup=build_codes_keyboard(labels),
         )
         return
 
@@ -301,7 +307,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        codes = [str(row.get("КОД", "")).strip() for row in free_rows if row.get("КОД")]
+        labels = [str(row.get("LABEL", "")).strip() for row in free_rows if row.get("LABEL")]
         preview = [
             f"• {row.get('КОД', '')} | {row.get('Адрес', '')}"
             for row in free_rows[:10]
@@ -310,7 +316,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = (
             "Свободные аптеки:\n\n"
             + "\n".join(preview)
-            + "\n\nНажми кнопку с кодом аптеки."
+            + "\n\nНажми кнопку с аптекой."
         )
 
         if len(free_rows) > 10:
@@ -318,7 +324,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             message,
-            reply_markup=build_codes_keyboard(codes),
+            reply_markup=build_codes_keyboard(labels),
         )
         return
 

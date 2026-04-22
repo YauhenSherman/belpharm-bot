@@ -20,12 +20,12 @@ def get_status_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
-def build_codes_keyboard(codes: list[str]):
+def build_codes_keyboard(items: list[str]):
     keyboard = []
     row = []
 
-    for code in codes[:20]:
-        row.append(code)
+    for item in items[:20]:
+        row.append(item)
         if len(row) == 2:
             keyboard.append(row)
             row = []
