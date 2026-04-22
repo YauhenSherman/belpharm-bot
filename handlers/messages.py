@@ -247,6 +247,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if found_row:
         selected_pharmacy_uid[telegram_id] = found_row.get("UID")
         selected_pharmacy_label[telegram_id] = found_row.get("LABEL")
+        logger.info(
+            "Аптека подтверждена | user=%s | uid=%s | label=%s",
+            telegram_id,
+            selected_pharmacy_uid.get(telegram_id),
+            selected_pharmacy_label.get(telegram_id),
+        )
 
         await update.message.reply_text(
             build_pharmacy_card(found_row),
