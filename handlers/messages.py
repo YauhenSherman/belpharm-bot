@@ -7,7 +7,9 @@ from keyboards.reply import (
     build_codes_keyboard,
     build_districts_keyboard,
     get_stand_format_keyboard,
-    get_pharmacy_actions_keyboard,
+    get_free_pharmacy_keyboard,
+    get_locked_by_me_keyboard,
+    get_readonly_pharmacy_keyboard,
 )
 from services.sheets import (
     get_rows,
@@ -50,10 +52,11 @@ STAND_FORMATS = [
 
 def get_actions_keyboard(row: dict, current_user_name: str):
     pharmacy_state = get_pharmacy_state(row)
-    return get_pharmacy_actions_keyboard(
-        pharmacy_state=pharmacy_state,
-        is_owner=is_locked_by_user(row, current_user_name),
-    )
+    if pharmacy_state == FREE_STATE:
+        return get_free_pharmacy_keyboard()
+    if pharmacy_state == LOCKED_STATE and is_locked_by_user(row, current_user_name):
+        return get_locked_by_me_keyboard()
+    return get_readonly_pharmacy_keyboard()
 
 
 async def save_final_status(
@@ -187,7 +190,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             "Аптека закреплена за тобой ✅",
-            reply_markup=get_actions_keyboard(saved_row, current_user_name),
+            reply_markup=get_main_keyboard(),
+        )
+        await update.message.reply_text(
+            build_pharmacy_card(saved_row),
+            reply_markup=get_locked_by_me_keyboard(),
         )
         return
 
@@ -212,7 +219,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             "Закрепление снято.",
-            reply_markup=get_actions_keyboard(unassigned, current_user_name),
+            reply_markup=get_main_keyboard(),
+        )
+        await update.message.reply_text(
+            build_pharmacy_card(unassigned),
+            reply_markup=get_free_pharmacy_keyboard(),
         )
         return
 

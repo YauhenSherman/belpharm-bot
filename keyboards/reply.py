@@ -1,15 +1,5 @@
 from telegram import ReplyKeyboardMarkup
 
-from services.pharmacy import FREE_STATE, LOCKED_STATE
-
-FINAL_STATUSES = [
-    "Согласовано",
-    "Отказ",
-    "Повторный визит",
-    "Не существует",
-]
-
-
 def get_main_keyboard():
     keyboard = [
         ["Мои аптеки", "Свободные аптеки"],
@@ -19,37 +9,26 @@ def get_main_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
-def get_status_keyboard():
-    return get_final_status_keyboard()
+def get_free_pharmacy_keyboard():
+    return ReplyKeyboardMarkup(
+        [["Закрепить за мной"], ["Меню"]],
+        resize_keyboard=True,
+    )
 
 
-def get_final_status_keyboard():
-    keyboard = [
-        ["Согласовано", "Отказ"],
-        ["Повторный визит", "Не существует"],
-        ["Меню"],
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+def get_locked_by_me_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            ["Согласовано", "Отказ"],
+            ["Повторный визит", "Не существует"],
+            ["Снять закрепление"],
+            ["Меню"],
+        ],
+        resize_keyboard=True,
+    )
 
 
-def get_pharmacy_actions_keyboard(pharmacy_state: str, is_owner: bool):
-    if pharmacy_state == FREE_STATE:
-        return ReplyKeyboardMarkup(
-            [["Закрепить за мной"], ["Меню"]],
-            resize_keyboard=True,
-        )
-
-    if pharmacy_state == LOCKED_STATE and is_owner:
-        return ReplyKeyboardMarkup(
-            [
-                ["Согласовано", "Отказ"],
-                ["Повторный визит", "Не существует"],
-                ["Снять закрепление"],
-                ["Меню"],
-            ],
-            resize_keyboard=True,
-        )
-
+def get_readonly_pharmacy_keyboard():
     return ReplyKeyboardMarkup([["Меню"]], resize_keyboard=True)
 
 
