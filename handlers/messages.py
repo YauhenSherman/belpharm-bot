@@ -174,7 +174,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "Закрепить за мной":
         if not selected_row:
-            await update.message.reply_text("Сначала выбери аптеку.", reply_markup=get_main_keyboard())
+            await update.message.reply_text(
+                "Сначала выбери аптеку.",
+                reply_markup=get_main_keyboard(),
+            )
             return
 
         if get_pharmacy_state(selected_row) != FREE_STATE:
@@ -200,7 +203,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "Снять закрепление":
         if not selected_row:
-            await update.message.reply_text("Сначала выбери аптеку.", reply_markup=get_main_keyboard())
+            await update.message.reply_text(
+                "Сначала выбери аптеку.",
+                reply_markup=get_main_keyboard(),
+            )
             return
 
         if not is_locked_by_user(selected_row, current_user_name):
@@ -229,7 +235,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text in FINAL_STATUSES:
         if not selected_row:
-            await update.message.reply_text("Сначала выбери аптеку.", reply_markup=get_main_keyboard())
+            await update.message.reply_text(
+                "Сначала выбери аптеку.",
+                reply_markup=get_main_keyboard(),
+            )
             return
 
         if not is_locked_by_user(selected_row, current_user_name):
@@ -300,9 +309,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if found_row:
         selected_pharmacy_uid[telegram_id] = found_row.get("UID")
         selected_pharmacy_label[telegram_id] = found_row.get("LABEL")
+
         pharmacy_state = get_pharmacy_state(found_row)
         is_owner = is_locked_by_user(found_row, current_user_name)
         actions_keyboard = get_actions_keyboard(found_row, current_user_name)
+
         logger.info(
             "SELECT_PHARMACY | user=%s | uid=%s | label=%s | step=%s | "
             "current_user_name=%s | responsible=%s | status=%s | pharmacy_state=%s | is_owner=%s | "

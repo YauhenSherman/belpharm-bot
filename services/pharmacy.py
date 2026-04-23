@@ -85,7 +85,6 @@ def get_pharmacy_state(row: dict) -> str:
 
     if not responsible and not status:
         return FREE_STATE
-    # Переходный период: есть ответственный, но статус ещё не проставлен.
     if responsible and not status:
         return LOCKED_STATE
     if responsible and status == LOCKED_STATUS:
@@ -105,7 +104,10 @@ def is_locked_by_user(row: dict, user_name: str) -> bool:
 def build_pharmacy_card(row: dict) -> str:
     format_value = row.get("Формат стенда", "")
     if not format_value:
-        format_value = row.get("Формат стенда (А4 вертикаль.горизонт, А5, А6 наклейка)", "")
+        format_value = row.get(
+            "Формат стенда (А4 вертикаль.горизонт, А5, А6 наклейка)",
+            "",
+        )
 
     return (
         f"🏥 Карточка аптеки\n\n"
