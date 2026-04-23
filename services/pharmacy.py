@@ -54,10 +54,21 @@ def enrich_pharmacy_rows(rows: list[dict]) -> list[dict]:
 
 def get_row_value(row: dict, keys: list[str]) -> str:
     for key in keys:
-        value = str(row.get(key, "")).strip()
+        value = str(row.get(key, "") or "").strip()
         if value:
             return value
     return ""
+
+
+def normalize_user_name(value: str) -> str:
+    return (
+        str(value or "")
+        .strip()
+        .lower()
+        .replace("ё", "е")
+        .replace(".", "")
+        .replace("  ", " ")
+    )
 
 
 def get_row_responsible(row: dict) -> str:
@@ -74,6 +85,8 @@ def get_pharmacy_state(row: dict) -> str:
 
     if not responsible and not status:
         return FREE_STATE
+    if responsible and not status:
+        return LOCKED_STATE
     if responsible and status == LOCKED_STATUS:
         return LOCKED_STATE
     if responsible and status in FINAL_STATUSES:
@@ -82,13 +95,19 @@ def get_pharmacy_state(row: dict) -> str:
 
 
 def is_locked_by_user(row: dict, user_name: str) -> bool:
-    return get_pharmacy_state(row) == LOCKED_STATE and get_row_responsible(row) == user_name
+    return (
+        get_pharmacy_state(row) == LOCKED_STATE
+        and normalize_user_name(get_row_responsible(row)) == normalize_user_name(user_name)
+    )
 
 
 def build_pharmacy_card(row: dict) -> str:
     format_value = row.get("Формат стенда", "")
     if not format_value:
-        format_value = row.get("Формат стенда (А4 вертикаль.горизонт, А5, А6 наклейка)", "")
+        format_value = row.get(
+            "Формат стенда (А4 вертикаль.горизонт, А5, А6 наклейка)",
+            "",
+        )
 
     return (
         f"🏥 Карточка аптеки\n\n"
