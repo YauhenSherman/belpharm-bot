@@ -1,5 +1,25 @@
 from utils.text import normalize_text as _normalize_text
 
+FREE_STATE = "free"
+LOCKED_STATE = "locked"
+DONE_STATE = "done"
+OTHER_STATE = "other"
+
+LOCKED_STATUS = "Закреплена"
+FINAL_STATUSES = ["Согласовано", "Отказ", "Повторный визит", "Не существует"]
+
+RESPONSIBLE_KEYS = [
+    "ОТВЕТСТВЕННЫЙ",
+    "Ответственный/СЛУЖИТЕЛЬ",
+    "Ответственный",
+    "СЛУЖИТЕЛЬ",
+]
+
+STATUS_KEYS = [
+    "Результаты согласования",
+    "Статус",
+]
+
 
 def normalize_text(text: str) -> str:
     return _normalize_text(text)
@@ -32,6 +52,39 @@ def enrich_pharmacy_rows(rows: list[dict]) -> list[dict]:
     return [enrich_pharmacy_row(row) for row in rows]
 
 
+def get_row_value(row: dict, keys: list[str]) -> str:
+    for key in keys:
+        value = str(row.get(key, "")).strip()
+        if value:
+            return value
+    return ""
+
+
+def get_row_responsible(row: dict) -> str:
+    return get_row_value(row, RESPONSIBLE_KEYS)
+
+
+def get_row_status(row: dict) -> str:
+    return get_row_value(row, STATUS_KEYS)
+
+
+def get_pharmacy_state(row: dict) -> str:
+    responsible = get_row_responsible(row)
+    status = get_row_status(row)
+
+    if not responsible and not status:
+        return FREE_STATE
+    if responsible and status == LOCKED_STATUS:
+        return LOCKED_STATE
+    if responsible and status in FINAL_STATUSES:
+        return DONE_STATE
+    return OTHER_STATE
+
+
+def is_locked_by_user(row: dict, user_name: str) -> bool:
+    return get_pharmacy_state(row) == LOCKED_STATE and get_row_responsible(row) == user_name
+
+
 def build_pharmacy_card(row: dict) -> str:
     format_value = row.get("Формат стенда", "")
     if not format_value:
@@ -45,8 +98,8 @@ def build_pharmacy_card(row: dict) -> str:
         f"Название: {row.get('Название', '')}\n"
         f"Телефон: {row.get('Телефон', '')}\n"
         f"Стенд: {row.get('ЕСТЬ СТЕНД (ГРУППА)', '')}\n"
-        f"Ответственный: {row.get('ОТВЕТСТВЕННЫЙ', '')}\n"
-        f"Статус: {row.get('Результаты согласования', '')}\n"
+        f"Ответственный: {get_row_responsible(row)}\n"
+        f"Статус: {get_row_status(row)}\n"
         f"Формат: {format_value}"
     )
 
