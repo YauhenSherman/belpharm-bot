@@ -1,39 +1,46 @@
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import USER_MAP
 from keyboards.reply import (
     get_main_keyboard,
-    get_status_keyboard,
     build_codes_keyboard,
     build_districts_keyboard,
     get_stand_format_keyboard,
+    get_free_pharmacy_keyboard,
+    get_locked_by_me_keyboard,
+    get_readonly_pharmacy_keyboard,
 )
-from services.sheets import get_rows, update_pharmacy_result
+from services.sheets import (
+    get_rows,
+    assign_pharmacy,
+    unassign_pharmacy,
+    finalize_pharmacy,
+)
 from services.reports import send_group_report
 from services.pharmacy import (
     get_user_name,
     build_pharmacy_card,
-    find_row_by_code,
+    find_row_by_label,
+    find_row_by_uid,
+    FINAL_STATUSES,
+    FREE_STATE,
+    LOCKED_STATE,
+    DONE_STATE,
+    get_pharmacy_state,
+    is_locked_by_user,
+    get_row_responsible,
 )
 from state.memory import (
     user_state,
-    selected_pharmacy,
+    selected_pharmacy_uid,
+    selected_pharmacy_label,
     pending_status,
     pending_stand_format,
     selected_district,
 )
-from utils.text import normalize_text
 from utils.logger import logger
 
-
-STATUSES = [
-    "Согласовано",
-    "Отказ",
-    "Повторный визит",
-    "Не существует",
-    "Обслуживается",
-]
 
 STAND_FORMATS = [
     "А4 вертикаль",
@@ -41,6 +48,54 @@ STAND_FORMATS = [
     "А5",
     "А6 наклейка",
 ]
+
+
+def get_actions_keyboard(row: dict, current_user_name: str):
+    pharmacy_state = get_pharmacy_state(row)
+    if pharmacy_state == FREE_STATE:
+        return get_free_pharmacy_keyboard()
+    if pharmacy_state == LOCKED_STATE and is_locked_by_user(row, current_user_name):
+        return get_locked_by_me_keyboard()
+    return get_readonly_pharmacy_keyboard()
+
+
+async def save_final_status(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    telegram_id: int,
+    current_user_name: str,
+    selected_row: dict,
+    status: str,
+    stand_format: str | None = None,
+):
+    saved_row = finalize_pharmacy(
+        uid=str(selected_row.get("UID", "")),
+        status=status,
+        stand_format=stand_format,
+    )
+
+    await send_group_report(
+        context=context,
+        user_name=current_user_name,
+        pharmacy_code=str(saved_row.get("КОД", "")),
+        address=str(saved_row.get("Адрес", "")),
+        status=status,
+        comment="",
+        stand_format=stand_format,
+    )
+
+    user_state.pop(telegram_id, None)
+    pending_status.pop(telegram_id, None)
+    pending_stand_format.pop(telegram_id, None)
+
+    saved_message = f"Сохранено ✅\n\nСтатус: {status}"
+    if stand_format:
+        saved_message += f"\nФормат: {stand_format}"
+
+    await update.message.reply_text(
+        saved_message,
+        reply_markup=get_main_keyboard(),
+    )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -66,6 +121,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_state.pop(telegram_id, None)
         pending_status.pop(telegram_id, None)
         pending_stand_format.pop(telegram_id, None)
+        selected_pharmacy_uid.pop(telegram_id, None)
+        selected_pharmacy_label.pop(telegram_id, None)
         selected_district.pop(telegram_id, None)
 
         await update.message.reply_text(
@@ -75,16 +132,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     rows = get_rows()
+    current_user_name = get_user_name(telegram_id, USER_MAP)
+    selected_uid = selected_pharmacy_uid.get(telegram_id)
+    selected_row = find_row_by_uid(rows, selected_uid) if selected_uid else None
 
     if user_state.get(telegram_id) == "waiting_stand_format":
         if text == "Отмена":
             user_state.pop(telegram_id, None)
             pending_status.pop(telegram_id, None)
             pending_stand_format.pop(telegram_id, None)
-
             await update.message.reply_text(
                 "Выбор формата отменён.",
-                reply_markup=get_status_keyboard(),
+                reply_markup=get_main_keyboard(),
             )
             return
 
@@ -95,98 +154,108 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        pending_stand_format[telegram_id] = text
-        user_state[telegram_id] = "waiting_comment"
-
-        await update.message.reply_text(
-            "Напиши комментарий к этой аптеке.",
-            reply_markup=ReplyKeyboardMarkup([["Меню"]], resize_keyboard=True),
-        )
-        return
-
-    if user_state.get(telegram_id) == "waiting_comment":
-        code = selected_pharmacy.get(telegram_id)
-        status = pending_status.get(telegram_id)
-        stand_format = pending_stand_format.get(telegram_id)
-
-        if not code or not status:
+        if not selected_row or not is_locked_by_user(selected_row, current_user_name):
             await update.message.reply_text(
-                "Сначала выбери аптеку и статус.",
+                "Эта аптека уже не закреплена за тобой.",
                 reply_markup=get_main_keyboard(),
             )
             return
 
-        if status == "Согласовано" and not stand_format:
-            user_state[telegram_id] = "waiting_stand_format"
+        await save_final_status(
+            update=update,
+            context=context,
+            telegram_id=telegram_id,
+            current_user_name=current_user_name,
+            selected_row=selected_row,
+            status="Согласовано",
+            stand_format=text,
+        )
+        return
+
+    if text == "Закрепить за мной":
+        if not selected_row:
+            await update.message.reply_text("Сначала выбери аптеку.", reply_markup=get_main_keyboard())
+            return
+
+        if get_pharmacy_state(selected_row) != FREE_STATE:
             await update.message.reply_text(
-                "Сначала выбери формат стенда.",
-                reply_markup=get_stand_format_keyboard(),
+                "Эта аптека уже не свободна.",
+                reply_markup=get_actions_keyboard(selected_row, current_user_name),
             )
             return
 
-        comment = text
-        saved_row = update_pharmacy_result(
-            code=code,
-            status=status,
-            comment=comment,
-            stand_format=stand_format,
-            normalize_text_func=normalize_text,
-        )
-
-        report_user_name = get_user_name(telegram_id, USER_MAP) or f"ID {telegram_id}"
-        pharmacy_code = str(saved_row.get("КОД", "")) if saved_row else str(code)
-        address = str(saved_row.get("Адрес", "")) if saved_row else ""
-
-        await send_group_report(
-            context=context,
-            user_name=report_user_name,
-            pharmacy_code=pharmacy_code,
-            address=address,
-            status=status,
-            comment=comment,
-            stand_format=stand_format,
-        )
-
-        user_state.pop(telegram_id, None)
-        pending_status.pop(telegram_id, None)
-        pending_stand_format.pop(telegram_id, None)
-
-        saved_message = f"Сохранено ✅\n\nСтатус: {status}"
-        if stand_format:
-            saved_message += f"\nФормат: {stand_format}"
-        saved_message += f"\nКомментарий: {comment}"
+        saved_row = assign_pharmacy(str(selected_row.get("UID", "")), current_user_name)
+        selected_pharmacy_uid[telegram_id] = saved_row.get("UID")
+        selected_pharmacy_label[telegram_id] = saved_row.get("LABEL")
 
         await update.message.reply_text(
-            saved_message,
+            "Аптека закреплена за тобой ✅",
             reply_markup=get_main_keyboard(),
         )
+        await update.message.reply_text(
+            build_pharmacy_card(saved_row),
+            reply_markup=get_locked_by_me_keyboard(),
+        )
         return
 
-    if text in STATUSES:
-        code = selected_pharmacy.get(telegram_id)
+    if text == "Снять закрепление":
+        if not selected_row:
+            await update.message.reply_text("Сначала выбери аптеку.", reply_markup=get_main_keyboard())
+            return
 
-        if not code:
+        if not is_locked_by_user(selected_row, current_user_name):
             await update.message.reply_text(
-                "Сначала выбери аптеку.",
-                reply_markup=get_main_keyboard(),
+                "Можно снять только свою закреплённую аптеку со статусом «Закреплена».",
+                reply_markup=get_actions_keyboard(selected_row, current_user_name),
             )
             return
 
-        pending_status[telegram_id] = text
+        unassigned = unassign_pharmacy(str(selected_row.get("UID", "")))
+        selected_pharmacy_uid[telegram_id] = unassigned.get("UID")
+        selected_pharmacy_label[telegram_id] = unassigned.get("LABEL")
+        pending_status.pop(telegram_id, None)
         pending_stand_format.pop(telegram_id, None)
+        user_state.pop(telegram_id, None)
+
+        await update.message.reply_text(
+            "Закрепление снято.",
+            reply_markup=get_main_keyboard(),
+        )
+        await update.message.reply_text(
+            build_pharmacy_card(unassigned),
+            reply_markup=get_free_pharmacy_keyboard(),
+        )
+        return
+
+    if text in FINAL_STATUSES:
+        if not selected_row:
+            await update.message.reply_text("Сначала выбери аптеку.", reply_markup=get_main_keyboard())
+            return
+
+        if not is_locked_by_user(selected_row, current_user_name):
+            await update.message.reply_text(
+                "Финальный статус можно ставить только своей закреплённой аптеке.",
+                reply_markup=get_actions_keyboard(selected_row, current_user_name),
+            )
+            return
 
         if text == "Согласовано":
             user_state[telegram_id] = "waiting_stand_format"
+            pending_status[telegram_id] = text
             await update.message.reply_text(
                 "Выбери формат стенда 👇",
                 reply_markup=get_stand_format_keyboard(),
             )
             return
 
-        user_state[telegram_id] = "waiting_comment"
-        await update.message.reply_text(
-            "Напиши комментарий к этой аптеке.",
-            reply_markup=ReplyKeyboardMarkup([["Меню"]], resize_keyboard=True),
+        await save_final_status(
+            update=update,
+            context=context,
+            telegram_id=telegram_id,
+            current_user_name=current_user_name,
+            selected_row=selected_row,
+            status=text,
+            stand_format=None,
         )
         return
 
@@ -206,7 +275,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         selected_district[telegram_id] = text
         user_state[telegram_id] = "district_selected"
 
-        codes = [str(row.get("КОД", "")).strip() for row in district_rows if row.get("КОД")]
+        labels = [str(row.get("LABEL", "")).strip() for row in district_rows if row.get("LABEL")]
         preview = [
             f"• {row.get('КОД', '')} | {row.get('Адрес', '')}"
             for row in district_rows[:10]
@@ -215,7 +284,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = (
             f"Район: {text}\n\n"
             + "\n".join(preview)
-            + "\n\nНажми кнопку с кодом аптеки."
+            + "\n\nНажми кнопку с аптекой."
         )
 
         if len(district_rows) > 10:
@@ -223,23 +292,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             message,
-            reply_markup=build_codes_keyboard(codes),
+            reply_markup=build_codes_keyboard(labels),
         )
         return
 
-    found_row = find_row_by_code(rows, text)
+    found_row = find_row_by_label(rows, text)
     if found_row:
-        selected_pharmacy[telegram_id] = found_row.get("КОД")
+        selected_pharmacy_uid[telegram_id] = found_row.get("UID")
+        selected_pharmacy_label[telegram_id] = found_row.get("LABEL")
+        logger.info(
+            "SELECT_PHARMACY | user=%s | uid=%s | label=%s | step=%s",
+            telegram_id,
+            selected_pharmacy_uid.get(telegram_id),
+            selected_pharmacy_label.get(telegram_id),
+            user_state.get(telegram_id),
+        )
 
         await update.message.reply_text(
             build_pharmacy_card(found_row),
-            reply_markup=get_status_keyboard(),
+            reply_markup=get_actions_keyboard(found_row, current_user_name),
         )
         return
 
     if text == "Мои аптеки":
-        current_user_name = get_user_name(telegram_id, USER_MAP)
-
         if not current_user_name:
             await update.message.reply_text(
                 f"Твой Telegram ID: {telegram_id}\n"
@@ -251,7 +326,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         my_rows = []
         for row in rows:
-            responsible = str(row.get("ОТВЕТСТВЕННЫЙ", "")).strip()
+            responsible = get_row_responsible(row)
             if responsible == current_user_name:
                 my_rows.append(row)
 
@@ -262,7 +337,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        codes = [str(row.get("КОД", "")).strip() for row in my_rows if row.get("КОД")]
+        labels = [str(row.get("LABEL", "")).strip() for row in my_rows if row.get("LABEL")]
         preview = [
             f"• {row.get('КОД', '')} | {row.get('Адрес', '')}"
             for row in my_rows[:10]
@@ -271,7 +346,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = (
             f"Мои аптеки ({current_user_name}):\n\n"
             + "\n".join(preview)
-            + "\n\nНажми кнопку с кодом аптеки."
+            + "\n\nНажми кнопку с аптекой."
         )
 
         if len(my_rows) > 10:
@@ -279,20 +354,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             message,
-            reply_markup=build_codes_keyboard(codes),
+            reply_markup=build_codes_keyboard(labels),
         )
         return
 
     if text == "Свободные аптеки":
-        free_rows = []
-
-        for row in rows:
-            responsible = str(row.get("ОТВЕТСТВЕННЫЙ", "")).strip()
-            status = str(row.get("Результаты согласования", "")).strip()
-            stand = str(row.get("ЕСТЬ СТЕНД (ГРУППА)", "")).strip()
-
-            if not responsible or not status or not stand:
-                free_rows.append(row)
+        free_rows = [row for row in rows if get_pharmacy_state(row) == FREE_STATE]
 
         if not free_rows:
             await update.message.reply_text(
@@ -301,7 +368,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        codes = [str(row.get("КОД", "")).strip() for row in free_rows if row.get("КОД")]
+        labels = [str(row.get("LABEL", "")).strip() for row in free_rows if row.get("LABEL")]
         preview = [
             f"• {row.get('КОД', '')} | {row.get('Адрес', '')}"
             for row in free_rows[:10]
@@ -310,7 +377,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = (
             "Свободные аптеки:\n\n"
             + "\n".join(preview)
-            + "\n\nНажми кнопку с кодом аптеки."
+            + "\n\nНажми кнопку с аптекой."
         )
 
         if len(free_rows) > 10:
@@ -318,7 +385,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             message,
-            reply_markup=build_codes_keyboard(codes),
+            reply_markup=build_codes_keyboard(labels),
         )
         return
 
@@ -348,30 +415,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "Статистика":
         total = len(rows)
-        agreed = 0
-        refused = 0
-        revisit = 0
-        missing = 0
+        locked = 0
+        completed = 0
+        free = 0
 
         for row in rows:
-            status = str(row.get("Результаты согласования", "")).strip()
-
-            if status == "Согласовано":
-                agreed += 1
-            elif status == "Отказ":
-                refused += 1
-            elif status == "Повторный визит":
-                revisit += 1
-            elif not status:
-                missing += 1
+            state = get_pharmacy_state(row)
+            if state == FREE_STATE:
+                free += 1
+            elif state == LOCKED_STATE:
+                locked += 1
+            elif state == DONE_STATE:
+                completed += 1
 
         message = (
             "📊 Статистика\n\n"
             f"Всего аптек: {total}\n"
-            f"Согласовано: {agreed}\n"
-            f"Отказ: {refused}\n"
-            f"Повторный визит: {revisit}\n"
-            f"Без статуса: {missing}"
+            f"Свободные: {free}\n"
+            f"Закреплённые: {locked}\n"
+            f"Завершённые: {completed}"
         )
 
         await update.message.reply_text(
