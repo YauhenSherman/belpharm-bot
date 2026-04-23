@@ -1,6 +1,5 @@
 from telegram import ReplyKeyboardMarkup
 
-
 def get_main_keyboard():
     keyboard = [
         ["Мои аптеки", "Свободные аптеки"],
@@ -10,22 +9,36 @@ def get_main_keyboard():
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
-def get_status_keyboard():
-    keyboard = [
-        ["Согласовано", "Отказ"],
-        ["Повторный визит", "Не существует"],
-        ["Обслуживается"],
-        ["Меню"],
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+def get_free_pharmacy_keyboard():
+    return ReplyKeyboardMarkup(
+        [["Закрепить за мной"], ["Меню"]],
+        resize_keyboard=True,
+    )
 
 
-def build_codes_keyboard(codes: list[str]):
+def get_locked_by_me_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            ["Согласовано", "Отказ"],
+            ["Повторный визит", "Не существует"],
+            ["Комментарий"],
+            ["Снять закрепление"],
+            ["Меню"],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def get_readonly_pharmacy_keyboard():
+    return ReplyKeyboardMarkup([["Меню"]], resize_keyboard=True)
+
+
+def build_codes_keyboard(items: list[str]):
     keyboard = []
     row = []
 
-    for code in codes[:20]:
-        row.append(code)
+    for item in items[:20]:
+        row.append(item)
         if len(row) == 2:
             keyboard.append(row)
             row = []
