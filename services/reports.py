@@ -10,7 +10,7 @@ async def send_group_report(
     pharmacy_code: str,
     address: str,
     status: str,
-    comment: str,
+    comment: str = "",
     stand_format: str | None = None,
 ):
     logger.info("GROUP_CHAT_ID=%s", GROUP_CHAT_ID)
@@ -29,7 +29,8 @@ async def send_group_report(
     if stand_format:
         text += f"🧩 Формат стенда: {stand_format}\n"
 
-    text += f"💬 Комментарий: {comment}"
+    if comment:
+        text += f"💬 Комментарий: {comment}"
 
     try:
         await context.bot.send_message(
