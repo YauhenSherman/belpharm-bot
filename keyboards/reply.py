@@ -1,5 +1,6 @@
 from telegram import ReplyKeyboardMarkup
 
+
 def get_main_keyboard():
     keyboard = [
         ["Мои аптеки", "Свободные аптеки"],
@@ -21,6 +22,7 @@ def get_locked_by_me_keyboard():
         [
             ["Согласовано", "Отказ"],
             ["Повторный визит", "Не существует"],
+            ["Комментарий"],
             ["Снять закрепление"],
             ["Меню"],
         ],

@@ -37,6 +37,7 @@ from state.memory import (
     selected_pharmacy_label,
     pending_status,
     pending_stand_format,
+    pending_comment,
     selected_district,
 )
 from utils.logger import logger
@@ -68,6 +69,8 @@ async def save_final_status(
     status: str,
     stand_format: str | None = None,
 ):
+    comment = pending_comment.get(telegram_id, "")
+
     saved_row = finalize_pharmacy(
         uid=str(selected_row.get("UID", "")),
         status=status,
@@ -80,17 +83,20 @@ async def save_final_status(
         pharmacy_code=str(saved_row.get("КОД", "")),
         address=str(saved_row.get("Адрес", "")),
         status=status,
-        comment="",
+        comment=comment,
         stand_format=stand_format,
     )
 
     user_state.pop(telegram_id, None)
     pending_status.pop(telegram_id, None)
     pending_stand_format.pop(telegram_id, None)
+    pending_comment.pop(telegram_id, None)
 
     saved_message = f"Сохранено ✅\n\nСтатус: {status}"
     if stand_format:
         saved_message += f"\nФормат: {stand_format}"
+    if comment:
+        saved_message += f"\nКомментарий: {comment}"
 
     await update.message.reply_text(
         saved_message,
@@ -121,6 +127,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_state.pop(telegram_id, None)
         pending_status.pop(telegram_id, None)
         pending_stand_format.pop(telegram_id, None)
+        pending_comment.pop(telegram_id, None)
         selected_pharmacy_uid.pop(telegram_id, None)
         selected_pharmacy_label.pop(telegram_id, None)
         selected_district.pop(telegram_id, None)
@@ -169,6 +176,46 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             selected_row=selected_row,
             status="Согласовано",
             stand_format=text,
+        )
+        return
+
+    if text == "Комментарий":
+        if not selected_row:
+            await update.message.reply_text(
+                "Сначала выбери аптеку.",
+                reply_markup=get_main_keyboard(),
+            )
+            return
+
+        if not is_locked_by_user(selected_row, current_user_name):
+            await update.message.reply_text(
+                "Комментарий можно оставить только для своей закреплённой аптеки.",
+                reply_markup=get_actions_keyboard(selected_row, current_user_name),
+            )
+            return
+
+        user_state[telegram_id] = "waiting_comment"
+        await update.message.reply_text(
+            "Напиши комментарий текстом.\n\nИли нажми «Меню» для отмены.",
+            reply_markup=get_main_keyboard(),
+        )
+        return
+
+    if user_state.get(telegram_id) == "waiting_comment":
+        if not selected_row or not is_locked_by_user(selected_row, current_user_name):
+            user_state.pop(telegram_id, None)
+            await update.message.reply_text(
+                "Эта аптека уже не закреплена за тобой.",
+                reply_markup=get_main_keyboard(),
+            )
+            return
+
+        pending_comment[telegram_id] = text
+        user_state.pop(telegram_id, None)
+
+        await update.message.reply_text(
+            f"Комментарий сохранён:\n\n{text}",
+            reply_markup=get_locked_by_me_keyboard(),
         )
         return
 
@@ -221,6 +268,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         selected_pharmacy_label[telegram_id] = unassigned.get("LABEL")
         pending_status.pop(telegram_id, None)
         pending_stand_format.pop(telegram_id, None)
+        pending_comment.pop(telegram_id, None)
         user_state.pop(telegram_id, None)
 
         await update.message.reply_text(

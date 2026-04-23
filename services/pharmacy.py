@@ -85,6 +85,7 @@ def get_pharmacy_state(row: dict) -> str:
 
     if not responsible and not status:
         return FREE_STATE
+    # Переходный период: есть ответственный, но статус ещё не проставлен.
     if responsible and not status:
         return LOCKED_STATE
     if responsible and status == LOCKED_STATUS:
