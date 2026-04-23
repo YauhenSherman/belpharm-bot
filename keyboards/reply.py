@@ -1,5 +1,6 @@
 from telegram import ReplyKeyboardMarkup
 
+
 def get_main_keyboard():
     keyboard = [
         ["Мои аптеки", "Свободные аптеки"],
